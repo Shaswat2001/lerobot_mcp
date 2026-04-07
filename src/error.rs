@@ -1,25 +1,39 @@
+/// Unified error type for lerobot-mcp.
+///
+
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+/// Every fallible operation in the crate returns this error type.
+/// The `#[from]` attributes generate `impl From<X> for Error`,
+/// which is what makes the `?` operator work across error types.
+#[derive(Error, Debug)]
 pub enum AppError {
-    #[error("Dataset not found: {repo_id}")]
-    NotFound { repo_id: String },
- 
-    #[error("Hub API error: {status} for {url}")]
-    HubApi { status: u16, url: String, body: String },
- 
-    #[error("Rate limited, retry after {retry_after_secs}s")]
-    RateLimited { retry_after_secs: u64 },
- 
+    #[error("Invalid configuration: {message}")]
+    InvalidConfig { message: String },
+
     #[error("Invalid parameter: {message}")]
     InvalidParam { message: String },
 
     #[error(transparent)]
-    Http(#[from] reqwest::Error),
+    Json(#[from] serde_json::Error),
 
     #[error(transparent)]
-    Json(#[from] serde_json::Error),
+    Http(#[from] reqwest::Error),
+
+    #[error("Hub API error: HTTP {status} for {url}")]
+    HubApi {
+        status: u16,
+        url: String,
+        body: String,
+    },
+
+    #[error("Dataset not found: {repo_id}")]
+    NotFound { repo_id: String },
+
+    #[error("Rate limited by HF Hub, retry after {retry_after_secs}s")]
+    RateLimited { retry_after_secs: u64 },
 }
 
-// This lets you write Result<T> instead of Result<T, AppError> everywhere
-pub type Result<T> = std::result::Result<T, AppError>;
+/// Convenience alias so every module can write `Result<T>` instead of
+/// `std::result::Result<T, crate::error::Error>`.
+pub type Result<T> = std::result::Result<T, Error>;
