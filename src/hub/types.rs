@@ -180,6 +180,77 @@ impl CardData {
     }
 }
 
+impl DatasetListItem {
+    /// Extract LeRobot metadata from the description field.
+    /// The description often contains a dump of meta/info.json with
+    /// fields like robot_type, fps, total_episodes, total_frames.
+    pub fn lerobot_metadata(&self) -> LeRobotMetadata {
+        // First try cardData
+        let mut meta = self
+            .card_data
+            .as_ref()
+            .map(|cd| cd.lerobot_metadata())
+            .unwrap_or_default();
+
+        // Then try parsing meta/info.json from the description
+        if let Some(desc) = &self.description {
+            if let Some(start) = desc.find('{') {
+                // Find the matching closing brace for the JSON block
+                if let Some(json_str) = extract_json_block(&desc[start..]) {
+                    if let Ok(info) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                        if meta.robot_type.is_none() {
+                            meta.robot_type = info
+                                .get("robot_type")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                        }
+                        if meta.fps.is_none() {
+                            meta.fps = info.get("fps").and_then(|v| v.as_u64()).map(|v| v as u32);
+                        }
+                        if meta.num_episodes.is_none() {
+                            meta.num_episodes =
+                                info.get("total_episodes").and_then(|v| v.as_u64());
+                        }
+                        if meta.num_frames.is_none() {
+                            meta.num_frames = info.get("total_frames").and_then(|v| v.as_u64());
+                        }
+                        if meta.features.is_empty() {
+                            if let Some(obj) = info.get("features").and_then(|v| v.as_object()) {
+                                meta.features = obj.keys().cloned().collect();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        meta
+    }
+}
+
+/// Extract a JSON object from a string, handling nested braces.
+fn extract_json_block(s: &str) -> Option<String> {
+    let mut depth = 0;
+    let mut end = 0;
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = i + 1;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    if end > 0 {
+        Some(s[..end].to_string())
+    } else {
+        None
+    }
+}
 // ─── Hub REST API: GET /api/datasets/{repo_id}?full=true ─────────────────
  
 /// Detailed info for a single dataset. Same fields as DatasetListItem

@@ -70,7 +70,7 @@ impl HubClient {
         limit: u32,
     ) -> Result<Vec<DatasetListItem>> {
         let url = format!(
-            "{}/datasets?search={}&filter=other:LeRobot&sort=downloads&direction=-1&limit={}&full=true&cardData=true",
+            "{}/datasets?search={}&filter=LeRobot&sort=downloads&direction=-1&limit={}&full=true&cardData=true",
             self.hf_api_base,
             urlencoding::encode(query),
             limit,

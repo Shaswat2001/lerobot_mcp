@@ -91,11 +91,7 @@ pub async fn execute_search(
     let filtered: Vec<SearchResultItem> = items
         .into_iter()
         .filter_map(|item| {
-            let meta = item
-                .card_data
-                .as_ref()
-                .map(|cd| cd.lerobot_metadata())
-                .unwrap_or_default();
+            let meta = item.lerobot_metadata();
  
             // Filter by robot_type if specified
             if let Some(rt) = robot_type {

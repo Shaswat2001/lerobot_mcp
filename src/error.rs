@@ -1,6 +1,4 @@
-/// Unified error type for lerobot-mcp.
-///
-
+//! Unified error type for lerobot-mcp.
 use thiserror::Error;
 
 /// Every fallible operation in the crate returns this error type.
