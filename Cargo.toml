@@ -32,3 +32,4 @@ anyhow = "1.0.102"
 # Logging
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 tracing = "0.1.44"
+moka = { version = "0.12.15", features = ["future"] }

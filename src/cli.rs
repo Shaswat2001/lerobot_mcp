@@ -1,4 +1,4 @@
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, ValueEnum)]
@@ -15,6 +15,26 @@ pub enum LogFormat {
     Json
 }
 
+#[derive(Debug, Clone, Subcommand)]
+pub enum Command {
+    /// Start the MCP server
+    Serve,
+    /// Search datasets directly (no MCP server)
+    Search {
+        /// Search query
+        query: String,
+        /// Filter by robot type
+        #[arg(long)]
+        robot_type: Option<String>,
+        /// Minimum episodes
+        #[arg(long)]
+        min_episodes: Option<u32>,
+        /// Max results
+        #[arg(long, default_value = "10")]
+        limit: u32,
+    },
+}
+
 /// lerobot-mcp: A Rust MCP server for the LeRobot dataset ecosystem.
 ///
 /// Gives any MCP-compatible LLM client conversational access to the
@@ -22,6 +42,9 @@ pub enum LogFormat {
 #[derive(Debug, Parser)]
 #[command(name = "lerobot-mcp", version, about)]
 pub struct Cli {
+
+    #[command(subcommand)]
+    pub command: Option<Command>,
     /// Transport mode
     #[arg(short, long, value_enum, default_value_t=Transport::Stdio)]
     pub transport: Transport,

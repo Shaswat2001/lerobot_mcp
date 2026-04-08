@@ -86,7 +86,6 @@ pub async fn execute_search(
  
     let items: Vec<DatasetListItem> = client.search_datasets(query, fetch_limit).await?;
     let total_found = items.len();
- 
     // Post-filter and transform
     let filtered: Vec<SearchResultItem> = items
         .into_iter()

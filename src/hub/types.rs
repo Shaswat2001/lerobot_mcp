@@ -6,6 +6,7 @@
 //! have wildly inconsistent metadata.
 
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashMap;
 
 // ─── Hub REST API: GET /api/datasets?search=...&full=true&cardData=true ───
@@ -131,7 +132,6 @@ impl CardData {
     /// This does best-effort parsing since community datasets are inconsistent.
     pub fn lerobot_metadata(&self) -> LeRobotMetadata {
         let mut meta = LeRobotMetadata::default();
- 
         // robot_type: sometimes in extra as a direct key
         if let Some(val) = self.extra.get("robot_type") {
             meta.robot_type = val.as_str().map(|s| s.to_string());
@@ -230,12 +230,24 @@ impl DatasetListItem {
 
 /// Extract a JSON object from a string, handling nested braces.
 fn extract_json_block(s: &str) -> Option<String> {
+    let start = s.find('{')?;
+    let s = &s[start..];
+
     let mut depth = 0;
     let mut end = 0;
+    let mut in_string = false;
+    let mut escape = false;
+
     for (i, ch) in s.char_indices() {
+        if escape {
+            escape = false;
+            continue;
+        }
         match ch {
-            '{' => depth += 1,
-            '}' => {
+            '\\' if in_string => escape = true,
+            '"' => in_string = !in_string,
+            '{' if !in_string => depth += 1,
+            '}' if !in_string => {
                 depth -= 1;
                 if depth == 0 {
                     end = i + 1;
@@ -245,8 +257,58 @@ fn extract_json_block(s: &str) -> Option<String> {
             _ => {}
         }
     }
+
+    // Clean case: balanced braces
     if end > 0 {
-        Some(s[..end].to_string())
+        let candidate = &s[..end];
+        if serde_json::from_str::<Value>(candidate).is_ok() {
+            return Some(candidate.to_string());
+        }
+    }
+
+    // Truncated: salvage by cutting last incomplete pair and closing braces
+    let mut truncated = s.to_string();
+
+    // Strip trailing incomplete value — cut back to last comma at top level
+    // Walk backwards past any trailing whitespace/ellipsis/garbage
+    let trim_chars: &[char] = &[' ', '\t', '\n', '\r', '…', '.'];
+    let trimmed = truncated.trim_end_matches(trim_chars);
+    truncated = trimmed.to_string();
+
+    // If it ends mid-value (e.g. `"key":` or `"key": "partial`), cut to last comma
+    if let Some(last_comma) = truncated.rfind(',') {
+        truncated.truncate(last_comma);
+    }
+
+    // Re-count open delimiters
+    let mut brace_depth = 0i32;
+    let mut bracket_depth = 0i32;
+    let mut in_str = false;
+    let mut esc = false;
+
+    for ch in truncated.chars() {
+        if esc { esc = false; continue; }
+        match ch {
+            '\\' if in_str => esc = true,
+            '"' => in_str = !in_str,
+            '{' if !in_str => brace_depth += 1,
+            '}' if !in_str => brace_depth -= 1,
+            '[' if !in_str => bracket_depth += 1,
+            ']' if !in_str => bracket_depth -= 1,
+            _ => {}
+        }
+    }
+
+    // Close any unclosed strings
+    if in_str {
+        truncated.push('"');
+    }
+
+    for _ in 0..bracket_depth { truncated.push(']'); }
+    for _ in 0..brace_depth { truncated.push('}'); }
+
+    if serde_json::from_str::<Value>(&truncated).is_ok() {
+        Some(truncated)
     } else {
         None
     }

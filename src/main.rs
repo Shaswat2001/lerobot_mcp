@@ -9,7 +9,7 @@ use tracing_subscriber::{EnvFilter, fmt};
 
 use hub::client::HubClient;
 use server::LeRobotServer;
-use cli::{Transport, LogFormat, Cli};
+use cli::{Transport, LogFormat, Cli, Command};
 
 fn init_tracing(format: &LogFormat) {
     let filter = EnvFilter::try_from_default_env()
@@ -51,19 +51,34 @@ async fn main() -> anyhow::Result<()> {
     let client = HubClient::new(cli.hf_token.as_deref())
         .expect("Failed to create Hub client");
 
-    let server = LeRobotServer::new(client);
+    // let server: LeRobotServer = LeRobotServer::new(client);
 
-    match cli.transport {
-        Transport::Stdio => {
-            tracing::info!("Serving over stdio");
-            let transport = rmcp::transport::io::stdio();
-            let service = rmcp::ServiceExt::serve(server, transport).await?;
-            service.waiting().await?;
+    match cli.command {
+        Some(Command::Search { query, robot_type, min_episodes, limit }) => {
+            let result = tools::search::execute_search(
+                &client,
+                &query,
+                robot_type.as_deref(),
+                min_episodes,
+                limit,
+            )
+            .await?;
+            print!("{}", result.to_markdown());
         }
-        Transport::Http => {
-            // HTTP transport will be added in Phase 7 behind a feature flag.
-            tracing::error!("HTTP transport is not yet implemented. Use --transport stdio.");
-            std::process::exit(1);
+        Some(Command::Serve) | None => {
+            let server = LeRobotServer::new(client);
+            match cli.transport {
+                Transport::Stdio => {
+                    tracing::info!("Serving over stdio");
+                    let transport = rmcp::transport::io::stdio();
+                    let service = rmcp::ServiceExt::serve(server, transport).await?;
+                    service.waiting().await?;
+                }
+                Transport::Http => {
+                    tracing::error!("HTTP transport not yet implemented");
+                    std::process::exit(1);
+                }
+            }
         }
     }
 
